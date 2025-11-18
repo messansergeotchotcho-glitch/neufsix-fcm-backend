@@ -2,7 +2,19 @@ const admin = require('firebase-admin');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
+
+// ✅ Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+if (!process.env.CLOUDINARY_CLOUD_NAME) {
+  console.warn('⚠️  Cloudinary not configured (CLOUDINARY_CLOUD_NAME missing)');
+}
 
 // Initialize Firebase Admin with service account
 const serviceAccountPath = path.join(__dirname, 'firebase-service-account.json');
@@ -160,6 +172,41 @@ async function sendFCMNotification(conversationId, senderId, messageText) {
     console.error('Stack:', error.stack);
   }
 }
+
+// ✅ DELETE IMAGE FROM CLOUDINARY ENDPOINT
+app.post('/delete-image', async (req, res) => {
+  try {
+    const { publicId } = req.body;
+    
+    if (!publicId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'publicId is required' 
+      });
+    }
+    
+    console.log(`🗑️  Deleting from Cloudinary: ${publicId}`);
+    
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: 'auto'
+    });
+    
+    console.log(`✅ Image deleted: ${result.result}`);
+    
+    return res.json({
+      success: true,
+      message: `Image ${publicId} deleted`,
+      result: result.result
+    });
+    
+  } catch (error) {
+    console.error('❌ Error deleting image:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
