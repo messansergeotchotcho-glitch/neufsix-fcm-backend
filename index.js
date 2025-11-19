@@ -373,6 +373,52 @@ app.post('/cleanup-expired-stories', async (req, res) => {
   }
 });
 
+// Upload category image endpoint
+app.post('/upload-category-image', async (req, res) => {
+  try {
+    const { category, imageBase64 } = req.body;
+    
+    if (!category || !imageBase64) {
+      return res.status(400).json({
+        success: false,
+        error: 'category and imageBase64 are required'
+      });
+    }
+    
+    if (!firebaseInitialized || !db) {
+      return res.status(503).json({
+        success: false,
+        error: 'Firebase not initialized'
+      });
+    }
+    
+    console.log(`\n📸 Uploading category image: ${category}`);
+    console.log(`   Base64 size: ${(imageBase64.length / 1024).toFixed(2)} KB`);
+    
+    // Upload to Firestore
+    await db.collection('categoryImages').doc(category).set({
+      imageBase64: imageBase64,
+      updatedAt: new Date(),
+    }, { merge: true });
+    
+    console.log(`✅ Image ${category} updated in Firestore`);
+    
+    res.json({
+      success: true,
+      message: `Category image ${category} uploaded successfully`,
+      category: category,
+      size: imageBase64.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error uploading category image:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
