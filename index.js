@@ -257,8 +257,10 @@ app.post('/delete-image', async (req, res) => {
     console.log(`   API Key: ${process.env.CLOUDINARY_API_KEY ? 'SET ✓' : 'NOT SET ✗'}`);
     console.log(`   API Secret: ${process.env.CLOUDINARY_API_SECRET ? 'SET ✓' : 'NOT SET ✗'}`);
     
+    // ✅ Delete image from Cloudinary
+    // IMPORTANT: use 'image' not 'auto' - 'auto' is not valid!
     const result = await cloudinary.uploader.destroy(publicId, {
-      resource_type: 'auto'
+      resource_type: 'image'  // ✅ FIXED: was 'auto', must be 'image'
     });
     
     console.log(`✅ Cloudinary response: ${JSON.stringify(result)}`);
