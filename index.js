@@ -20,80 +20,88 @@ if (!process.env.CLOUDINARY_CLOUD_NAME) {
 const serviceAccountPath = path.join(__dirname, 'firebase-service-account.json');
 
 let serviceAccount;
+let db = null;
+let firebaseInitialized = false;
+
 try {
   // Load from JSON file (most reliable)
   serviceAccount = require(serviceAccountPath);
   console.log('✅ Service account loaded from JSON file');
+  
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: process.env.DATABASE_URL || 'https://neufsix-dc96b.firebaseio.com'
+  });
+  
+  db = admin.firestore();
+  firebaseInitialized = true;
+  console.log('🔥 Firebase initialized');
 } catch (error) {
-  console.error('❌ Error loading service account:', error.message);
-  process.exit(1);
+  console.warn('⚠️  Firebase service account not available - running in Cloudinary-only mode');
+  console.warn(`   Reason: ${error.message}`);
+  console.log('💡 This is OK - backend can still delete images from Cloudinary!');
 }
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.DATABASE_URL || 'https://neufsix-dc96b.firebaseio.com'
-});
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const db = admin.firestore();
-
 console.log('🔥 Firebase initialized');
 console.log('📡 Starting message listeners...');
 
-// Listen to Messages collection
-db.collection('Messages').onSnapshot(
-  async (snapshot) => {
-    for (const change of snapshot.docChanges()) {
-      if (change.type === 'added') {
-        const message = change.doc.data();
-        console.log(`📨 New message detected: "${message.text?.substring(0, 30)}..."`);
-        
-        try {
-          await sendFCMNotification(
-            message.conversationId,
-            message.senderId,
-            message.text
-          );
-        } catch (error) {
-          console.error('❌ Error processing message:', error);
+// Listen to Messages collection (only if Firebase is initialized)
+if (firebaseInitialized && db) {
+  db.collection('Messages').onSnapshot(
+    async (snapshot) => {
+      for (const change of snapshot.docChanges()) {
+        if (change.type === 'added') {
+          const message = change.doc.data();
+          console.log(`📨 New message detected: "${message.text?.substring(0, 30)}..."`);
+          
+          try {
+            await sendFCMNotification(
+              message.conversationId,
+              message.senderId,
+              message.text
+            );
+          } catch (error) {
+            console.error('❌ Error processing message:', error);
+          }
         }
       }
+    },
+    (error) => {
+      console.error('❌ Error listening to Messages:', error);
     }
-  },
-  (error) => {
-    console.error('❌ Error listening to Messages:', error);
-  }
-);
+  );
 
-// Listen to MarketplaceMessages collection
-db.collection('MarketplaceMessages').onSnapshot(
-  async (snapshot) => {
-    for (const change of snapshot.docChanges()) {
-      if (change.type === 'added') {
-        const message = change.doc.data();
-        console.log(`📦 New marketplace message detected: "${message.text?.substring(0, 30)}..."`);
-        
-        try {
-          await sendFCMNotification(
-            message.conversationId,
-            message.senderId,
-            message.text
-          );
-        } catch (error) {
-          console.error('❌ Error processing marketplace message:', error);
+  // Listen to MarketplaceMessages collection
+  db.collection('MarketplaceMessages').onSnapshot(
+    async (snapshot) => {
+      for (const change of snapshot.docChanges()) {
+        if (change.type === 'added') {
+          const message = change.doc.data();
+          console.log(`📦 New marketplace message detected: "${message.text?.substring(0, 30)}..."`);
+          
+          try {
+            await sendFCMNotification(
+              message.conversationId,
+              message.senderId,
+              message.text
+            );
+          } catch (error) {
+            console.error('❌ Error processing marketplace message:', error);
+          }
         }
       }
+    },
+    (error) => {
+      console.error('❌ Error listening to MarketplaceMessages:', error);
     }
-  },
-  (error) => {
-    console.error('❌ Error listening to MarketplaceMessages:', error);
-  }
-);
-
-// Send FCM notification
+  );
+} else {
+  console.log('⏭️  Skipping Firebase message listeners - running in Cloudinary-only mode');
+}// Send FCM notification
 async function sendFCMNotification(conversationId, senderId, messageText) {
   try {
     console.log(`\n🔄 Processing notification for conversation: ${conversationId}`);
@@ -230,6 +238,12 @@ app.get('/status', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 Listening to Firestore for new messages...`);
-  console.log(`✅ Ready to send FCM notifications!`);
+  if (firebaseInitialized) {
+    console.log(`📡 Listening to Firestore for new messages...`);
+    console.log(`✅ Ready to send FCM notifications!`);
+  } else {
+    console.log(`📡 Running in Cloudinary-only mode`);
+    console.log(`✅ Ready to delete images from Cloudinary!`);
+  }
+  console.log(`🎯 POST /delete-image endpoint available`);
 });
