@@ -286,6 +286,93 @@ app.post('/delete-image', async (req, res) => {
   }
 });
 
+// ✅ CLEANUP EXPIRED STORIES ENDPOINT
+app.post('/cleanup-expired-stories', async (req, res) => {
+  try {
+    console.log(`\n🧹 POST /cleanup-expired-stories received`);
+    
+    if (!firebaseInitialized || !db) {
+      return res.status(503).json({
+        success: false,
+        error: 'Firebase not initialized'
+      });
+    }
+    
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    console.log(`   Current time: ${now.toISOString()}`);
+    console.log(`   24h ago: ${twentyFourHoursAgo.toISOString()}`);
+    
+    // ✅ Récupérer les stories de plus de 24h
+    const expiredSnapshot = await db.collection('stories')
+      .where('createdAt', '<', twentyFourHoursAgo)
+      .get();
+    
+    console.log(`   Found ${expiredSnapshot.size} expired stories`);
+    
+    let deletedCount = 0;
+    let errorCount = 0;
+    
+    // ✅ Supprimer chaque story expirée
+    for (const doc of expiredSnapshot.docs) {
+      try {
+        const storyData = doc.data();
+        const storyId = doc.id;
+        
+        console.log(`   📝 Processing story: ${storyId}`);
+        
+        // Supprimer les images/vidéos de Cloudinary
+        if (storyData.imageUrl) {
+          console.log(`      - Deleting image: ${storyData.imageUrl.substring(0, 50)}...`);
+          const imagePublicId = extractPublicIdFromUrl(storyData.imageUrl);
+          if (imagePublicId) {
+            await cloudinary.uploader.destroy(imagePublicId, {
+              resource_type: 'image'
+            });
+            console.log(`      ✅ Image deleted`);
+          }
+        }
+        
+        if (storyData.videoUrl) {
+          console.log(`      - Deleting video: ${storyData.videoUrl.substring(0, 50)}...`);
+          const videoPublicId = extractPublicIdFromUrl(storyData.videoUrl);
+          if (videoPublicId) {
+            await cloudinary.uploader.destroy(videoPublicId, {
+              resource_type: 'video'
+            });
+            console.log(`      ✅ Video deleted`);
+          }
+        }
+        
+        // Supprimer la story de Firestore
+        await db.collection('stories').doc(storyId).delete();
+        console.log(`      ✅ Story deleted from Firestore`);
+        deletedCount++;
+      } catch (error) {
+        console.error(`      ❌ Error deleting story: ${error.message}`);
+        errorCount++;
+      }
+    }
+    
+    console.log(`\n✅ Cleanup complete: ${deletedCount} deleted, ${errorCount} errors`);
+    
+    return res.json({
+      success: true,
+      message: `Deleted ${deletedCount} expired stories`,
+      deleted: deletedCount,
+      errors: errorCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in cleanup:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
