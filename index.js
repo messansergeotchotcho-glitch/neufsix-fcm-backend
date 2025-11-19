@@ -184,14 +184,22 @@ async function sendFCMNotification(conversationId, senderId, messageText) {
 // ✅ Helper: Extract publicId from Cloudinary URL
 function extractPublicIdFromUrl(url) {
   try {
+    console.log(`\n🔍 Extracting publicId from URL: ${url}`);
+    
     // URL format: https://res.cloudinary.com/dgsrr8tif/image/upload/v1234567890/public_id.jpg
     // or: https://res.cloudinary.com/dgsrr8tif/image/upload/public_id.jpg
     
     const urlObj = new URL(url);
+    console.log(`   Hostname: ${urlObj.hostname}`);
+    console.log(`   Pathname: ${urlObj.pathname}`);
+    
     const pathParts = urlObj.pathname.split('/').filter(p => p);
+    console.log(`   Path parts: ${JSON.stringify(pathParts)}`);
     
     // Find 'upload' index
     const uploadIndex = pathParts.indexOf('upload');
+    console.log(`   Upload index: ${uploadIndex}`);
+    
     if (uploadIndex === -1) {
       console.error('❌ "upload" not found in URL:', url);
       return null;
@@ -199,17 +207,21 @@ function extractPublicIdFromUrl(url) {
     
     // Get everything after 'upload'
     const afterUpload = pathParts.slice(uploadIndex + 1).join('/');
+    console.log(`   After upload: ${afterUpload}`);
     
     // Split by / to handle versions
     const segments = afterUpload.split('/');
+    console.log(`   Segments: ${JSON.stringify(segments)}`);
+    
     let publicId = segments.join('/'); // Join all segments
+    console.log(`   Public ID (raw): ${publicId}`);
     
     // Remove file extension
     if (publicId.includes('.')) {
       publicId = publicId.substring(0, publicId.lastIndexOf('.'));
     }
     
-    console.log(`✅ Extracted publicId from URL: ${publicId}`);
+    console.log(`✅ Extracted publicId: ${publicId}`);
     return publicId;
   } catch (error) {
     console.error('❌ Error extracting publicId:', error);
@@ -220,6 +232,9 @@ function extractPublicIdFromUrl(url) {
 // ✅ DELETE IMAGE FROM CLOUDINARY ENDPOINT
 app.post('/delete-image', async (req, res) => {
   try {
+    console.log(`\n📨 POST /delete-image received`);
+    console.log(`   Body: ${JSON.stringify(req.body)}`);
+    
     let { publicId, imageUrl } = req.body;
     
     // Si pas de publicId, essayer d'extraire de l'URL
@@ -229,6 +244,7 @@ app.post('/delete-image', async (req, res) => {
     }
     
     if (!publicId) {
+      console.error(`❌ No publicId extracted`);
       return res.status(400).json({ 
         success: false, 
         error: 'publicId or imageUrl is required',
@@ -237,12 +253,15 @@ app.post('/delete-image', async (req, res) => {
     }
     
     console.log(`🗑️  Deleting from Cloudinary: ${publicId}`);
+    console.log(`   Cloud name: ${process.env.CLOUDINARY_CLOUD_NAME}`);
+    console.log(`   API Key: ${process.env.CLOUDINARY_API_KEY ? 'SET ✓' : 'NOT SET ✗'}`);
+    console.log(`   API Secret: ${process.env.CLOUDINARY_API_SECRET ? 'SET ✓' : 'NOT SET ✗'}`);
     
     const result = await cloudinary.uploader.destroy(publicId, {
       resource_type: 'auto'
     });
     
-    console.log(`✅ Image deleted: ${result.result}`);
+    console.log(`✅ Cloudinary response: ${JSON.stringify(result)}`);
     
     return res.json({
       success: true,
