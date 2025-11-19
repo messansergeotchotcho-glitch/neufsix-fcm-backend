@@ -206,22 +206,28 @@ function extractPublicIdFromUrl(url) {
     }
     
     // Get everything after 'upload'
-    const afterUpload = pathParts.slice(uploadIndex + 1).join('/');
+    let afterUpload = pathParts.slice(uploadIndex + 1).join('/');
     console.log(`   After upload: ${afterUpload}`);
+    
+    // Remove file extension
+    if (afterUpload.includes('.')) {
+      afterUpload = afterUpload.substring(0, afterUpload.lastIndexOf('.'));
+    }
+    console.log(`   Without extension: ${afterUpload}`);
     
     // Split by / to handle versions
     const segments = afterUpload.split('/');
     console.log(`   Segments: ${JSON.stringify(segments)}`);
     
-    let publicId = segments.join('/'); // Join all segments
-    console.log(`   Public ID (raw): ${publicId}`);
-    
-    // Remove file extension
-    if (publicId.includes('.')) {
-      publicId = publicId.substring(0, publicId.lastIndexOf('.'));
+    // If first segment is a version (v123456), skip it
+    let publicId = afterUpload;
+    if (segments.length > 0 && segments[0].startsWith('v') && /^\d+$/.test(segments[0].substring(1))) {
+      // It's a version! Skip it
+      publicId = segments.slice(1).join('/');
+      console.log(`   ⏭️ Skipping version: ${segments[0]}`);
     }
     
-    console.log(`✅ Extracted publicId: ${publicId}`);
+    console.log(`✅ Final publicId: ${publicId}`);
     return publicId;
   } catch (error) {
     console.error('❌ Error extracting publicId:', error);
