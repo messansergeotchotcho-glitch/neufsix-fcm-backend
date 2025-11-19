@@ -181,15 +181,58 @@ async function sendFCMNotification(conversationId, senderId, messageText) {
   }
 }
 
+// ✅ Helper: Extract publicId from Cloudinary URL
+function extractPublicIdFromUrl(url) {
+  try {
+    // URL format: https://res.cloudinary.com/dgsrr8tif/image/upload/v1234567890/public_id.jpg
+    // or: https://res.cloudinary.com/dgsrr8tif/image/upload/public_id.jpg
+    
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(p => p);
+    
+    // Find 'upload' index
+    const uploadIndex = pathParts.indexOf('upload');
+    if (uploadIndex === -1) {
+      console.error('❌ "upload" not found in URL:', url);
+      return null;
+    }
+    
+    // Get everything after 'upload'
+    const afterUpload = pathParts.slice(uploadIndex + 1).join('/');
+    
+    // Split by / to handle versions
+    const segments = afterUpload.split('/');
+    let publicId = segments.join('/'); // Join all segments
+    
+    // Remove file extension
+    if (publicId.includes('.')) {
+      publicId = publicId.substring(0, publicId.lastIndexOf('.'));
+    }
+    
+    console.log(`✅ Extracted publicId from URL: ${publicId}`);
+    return publicId;
+  } catch (error) {
+    console.error('❌ Error extracting publicId:', error);
+    return null;
+  }
+}
+
 // ✅ DELETE IMAGE FROM CLOUDINARY ENDPOINT
 app.post('/delete-image', async (req, res) => {
   try {
-    const { publicId } = req.body;
+    let { publicId, imageUrl } = req.body;
+    
+    // Si pas de publicId, essayer d'extraire de l'URL
+    if (!publicId && imageUrl) {
+      console.log(`📍 No publicId provided, extracting from URL...`);
+      publicId = extractPublicIdFromUrl(imageUrl);
+    }
     
     if (!publicId) {
       return res.status(400).json({ 
         success: false, 
-        error: 'publicId is required' 
+        error: 'publicId or imageUrl is required',
+        received: { publicId, imageUrl }
       });
     }
     
